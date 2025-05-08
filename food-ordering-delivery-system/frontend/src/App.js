@@ -13,17 +13,19 @@ import CustomerDashboard from "./pages/CustomerDashboard";
 import DriverDashboard from "./pages/DriverDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 
+// ADMIN PAGES
 import ManageRestaurants from "./pages/admin-resturents/ManageRestaurants";
+import AddRestaurant from "./pages/admin-resturents/AddRestaurant";
+import EditRestaurantPage from "./pages/admin-resturents/EditRestaurantPage"; // ← NEW
 import ManageMenu from "./pages/admin-resturents/ManageMenu";
 import ManageOrders from "./pages/admin-resturents/ManageOrders";
-import AddRestaurant from "./pages/admin-resturents/AddRestaurant";
 
 // CUSTOMER PAGES
 import RestaurantsPage from "./pages/customer-resturents/RestaurantsPage";
 import RestaurantDetailPage from "./pages/customer-resturents/RestaurantDetailPage";
 import PaymentPage from "./pages/customer-resturents/PaymentPage";
 
-// DRIVER PAGES (you’ll need to create these stubs under src/pages/driver)
+// DRIVER PAGES
 import TripsPage from "./pages/driver/TripsPage";
 import RatingsPage from "./pages/driver/RatingsPage";
 import ProfilePage from "./pages/driver/ProfilePage";
@@ -39,8 +41,8 @@ function App() {
         return "/admin/dashboard";
       case "customer":
         return "/customer-dashboard";
-      case "delivery":
       case "driver":
+      case "delivery":
         return "/driver/dashboard";
       default:
         return "/login";
@@ -71,12 +73,21 @@ function App() {
 
         {/* ADMIN */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+
+        {/* Manage Restaurants */}
         <Route path="/admin/restaurants" element={<ManageRestaurants />} />
         <Route path="/admin/restaurants/add" element={<AddRestaurant />} />
+     
+        <Route
+          path="/admin/restaurants/edit/:id"
+          element={<EditRestaurantPage />}
+        />
+
+        {/* Manage Menu & Orders */}
         <Route path="/admin/menu" element={<ManageMenu />} />
         <Route path="/admin/orders" element={<ManageOrders />} />
 
-        {/* CATCH-ALL REDIRECT */}
+        {/* CATCH-ALL */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

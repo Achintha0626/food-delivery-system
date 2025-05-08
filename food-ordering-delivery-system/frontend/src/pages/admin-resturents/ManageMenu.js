@@ -1,168 +1,263 @@
-import React, { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import NavBar from "../../components/NavBar";
 import Header from "../../components/Header";
-import Modal from "react-modal";
+import api from "../../services/api";
 
-// Set the app element for react-modal
-Modal.setAppElement("#root");
+import RestaurantSelector from "../../components/resturent-admin/RestaurantSelector";
+import CategoryList from "../../components/resturent-admin/CategoryList";
+import MenuItemsGrid from "../../components/resturent-admin/MenuItemsGrid";
+import CategoryModal from "../../components/resturent-admin/CategoryModal";
+import ItemModal from "../../components/resturent-admin/ItemModal";
 
-function ManageMenu() {
+export default function ManageMenu() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [restaurants] = useState([
-    { _id: "1", name: "Delicious Diner" },
-    { _id: "2", name: "Spicy Kitchen" },
-    { _id: "3", name: "Fresh Fusion" },
-  ]);
+
+  // Restaurants
+  const [restaurants, setRestaurants] = useState([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState("");
-  const [menuCategories] = useState([
-    { id: "salad", name: "Salad", image: "menu_1.png" },
-    { id: "rolls", name: "Rolls", image: "menu_2.png" },
-    { id: "deserts", name: "Deserts", image: "menu_3.png" },
-    { id: "sandwich", name: "Sandwich", image: "menu_4.png" },
-    { id: "cake", name: "Cake", image: "menu_5.png" },
-    { id: "pure-veg", name: "Pure Veg", image: "menu_6.png" },
-    { id: "pasta", name: "Pasta", image: "menu_7.png" },
-    { id: "noodles", name: "Noodles", image: "menu_8.png" },
-  ]);
+
+  // Categories & Items
+  const [menuCategories, setMenuCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [allMenuItems, setAllMenuItems] = useState([]);
+  const [menuItemsInCategory, setMenuItemsInCategory] = useState([]);
 
-  // Initial dummy items
-  const [menuItemsInCategory, setMenuItemsInCategory] = useState([
-    {
-      id: "s1",
-      restaurantId: "1",
-      categoryId: "salad",
-      name: "Greek Salad",
-      description: "Fresh and healthy Greek salad.",
-      price: 12,
-      image: "greek-salad.jpg",
-    },
-    {
-      id: "s2",
-      restaurantId: "1",
-      categoryId: "salad",
-      name: "Italian Chopped Salad",
-      description: "Delicious Italian chopped salad.",
-      price: 15,
-      image: "ItalianChoppedSalad.webp",
-    },
-    {
-      id: "r1",
-      restaurantId: "1",
-      categoryId: "rolls",
-      name: "Chicken Spring Rolls",
-      description: "Savory chicken spring rolls.",
-      price: 8,
-      image: "Chicken-Spring-Rolls.jpg",
-    },
-    {
-      id: "d1",
-      restaurantId: "1",
-      categoryId: "deserts",
-      name: "Panna Cotta",
-      description: "Classic Italian panna cotta.",
-      price: 10,
-      image: "Panna-Cotta-desert.jpg",
-    },
-  ]);
+  // Category modal state
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [isEditMenuOpen, setIsEditMenuOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [menuName, setMenuName] = useState("");
+  const [menuImage, setMenuImage] = useState("");
 
-  // Modal open states
-  const [isAddMenuItemModalOpen, setIsAddMenuItemModalOpen] = useState(false);
+  // Item modal state
+  const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [isEditItemOpen, setIsEditItemOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [itemName, setItemName] = useState("");
+  const [itemDesc, setItemDesc] = useState("");
+  const [itemPrice, setItemPrice] = useState("");
+  const [itemImage, setItemImage] = useState("");
 
-  // New item form fields
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemDescription, setNewItemDescription] = useState("");
-  const [newItemPrice, setNewItemPrice] = useState("");
-  const [newItemImage, setNewItemImage] = useState(null);
-  const [newItemImagePreviewUrl, setNewItemImagePreviewUrl] = useState("");
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get("/restaurant");
+        setRestaurants(data);
+      } catch (err) {
+        console.error("Failed to load restaurants", err);
+      }
+    })();
+  }, []);
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  const toggleSidebar = () => setIsSidebarOpen((o) => !o);
 
-  const handleRestaurantChange = (e) => {
-    setSelectedRestaurantId(e.target.value);
+  // 1) Restaurant change
+  async function handleRestaurantChange(e) {
+    const id = e.target.value;
+    setSelectedRestaurantId(id);
     setSelectedCategory(null);
-    setMenuItemsInCategory((prev) =>
-      // filter out items not in this restaurant
-      prev.filter((item) => item.restaurantId === e.target.value)
-    );
-  };
+    setMenuCategories([]);
+    setAllMenuItems([]);
+    setMenuItemsInCategory([]);
+    if (!id) return;
 
-  const handleCategoryClick = (category) => {
-    if (!selectedRestaurantId) {
-      return alert("Please select a restaurant first.");
+    try {
+      const [catsRes, itemsRes] = await Promise.all([
+        api.get(`/restaurant/${id}/categories`),
+        api.get(`/restaurant/${id}/menu`),
+      ]);
+      setMenuCategories(catsRes.data);
+      setAllMenuItems(itemsRes.data.map((it) => ({ ...it, id: it._id })));
+    } catch (err) {
+      console.error(err);
     }
-    setSelectedCategory(category);
-    setMenuItemsInCategory((prev) =>
-      prev.filter(
-        (item) =>
-          item.restaurantId === selectedRestaurantId &&
-          item.categoryId === category.id
-      )
-    );
-  };
+  }
 
-  const openAddMenuItemModal = () => {
-    if (!selectedCategory) {
-      return alert("Please select a category first.");
+  // 2) Category selection
+  function selectCategory(cat) {
+    setSelectedCategory(cat);
+    setMenuItemsInCategory(allMenuItems.filter((i) => i.category === cat.id));
+  }
+  function backToMenus() {
+    setSelectedCategory(null);
+    setMenuItemsInCategory([]);
+  }
+
+  // 3) Category CRUD
+  function openAddMenu() {
+    setEditingCategory(null);
+    setMenuName("");
+    setMenuImage("");
+    setIsAddMenuOpen(true);
+  }
+  function closeAddMenu() {
+    setIsAddMenuOpen(false);
+  }
+  function onMenuImageChange(e) {
+    const f = e.target.files[0];
+    if (!f) return setMenuImage("");
+    const r = new FileReader();
+    r.onloadend = () => setMenuImage(r.result);
+    r.readAsDataURL(f);
+  }
+  async function saveAddMenu() {
+    try {
+      const { data } = await api.post(
+        `/restaurant/${selectedRestaurantId}/categories`,
+        { name: menuName, image: menuImage }
+      );
+      setMenuCategories((prev) => [...prev, data]);
+      closeAddMenu();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add menu");
     }
-    setIsAddMenuItemModalOpen(true);
-  };
+  }
 
-  const closeAddMenuItemModal = () => {
-    setIsAddMenuItemModalOpen(false);
-    // clear fields
-    setNewItemName("");
-    setNewItemDescription("");
-    setNewItemPrice("");
-    setNewItemImage(null);
-    setNewItemImagePreviewUrl("");
-  };
-
-  const handleNewItemImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setNewItemImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setNewItemImagePreviewUrl(reader.result);
-      reader.readAsDataURL(file);
-    } else {
-      setNewItemImage(null);
-      setNewItemImagePreviewUrl("");
+  function openEditMenu(cat) {
+    setEditingCategory(cat);
+    setMenuName(cat.name);
+    setMenuImage(cat.image);
+    setIsEditMenuOpen(true);
+  }
+  function closeEditMenu() {
+    setIsEditMenuOpen(false);
+  }
+  async function saveEditMenu() {
+    try {
+      const { data } = await api.put(
+        `/restaurant/${selectedRestaurantId}/categories/${editingCategory.id}`,
+        { name: menuName, image: menuImage }
+      );
+      setMenuCategories((prev) =>
+        prev.map((c) => (c.id === editingCategory.id ? data : c))
+      );
+      if (selectedCategory?.id === editingCategory.id) {
+        selectCategory(data);
+      }
+      closeEditMenu();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update menu");
     }
-  };
+  }
 
-  const handleSaveNewMenuItem = () => {
-    if (!newItemName || !newItemDescription || !newItemPrice || !newItemImage) {
-      return alert("Please fill all fields and upload an image.");
+  async function deleteMenu(cat) {
+    
+    if (!window.confirm("Delete this menu?")) return;
+    try {
+      await api.delete(
+        `/restaurant/${selectedRestaurantId}/categories/${cat.id}`
+      );
+      setMenuCategories((prev) => prev.filter((c) => c.id !== cat.id));
+      backToMenus();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete menu");
     }
+  }
 
-    const newItem = {
-      id: Date.now().toString(),
-      restaurantId: selectedRestaurantId,
-      categoryId: selectedCategory.id,
-      name: newItemName,
-      description: newItemDescription,
-      price: parseFloat(newItemPrice),
-      // save the data-URL for preview
-      image: newItemImagePreviewUrl,
-    };
+  
+  function openAddItem() {
+    setEditingItem(null);
+    setItemName("");
+    setItemDesc("");
+    setItemPrice("");
+    setItemImage("");
+    setIsAddItemOpen(true);
+  }
+  function closeAddItem() {
+    setIsAddItemOpen(false);
+  }
+  function onItemImageChange(e) {
+    const f = e.target.files[0];
+    if (!f) return setItemImage("");
+    const r = new FileReader();
+    r.onloadend = () => setItemImage(r.result);
+    r.readAsDataURL(f);
+  }
+  async function saveAddItem() {
+    if (!selectedCategory) return;
+    try {
+      const { data } = await api.post(
+        `/restaurant/${selectedRestaurantId}/menu`,
+        {
+          name: itemName,
+          description: itemDesc,
+          price: parseFloat(itemPrice),
+          image: itemImage,
+          category: selectedCategory.id,
+        }
+      );
+      const saved = { ...data, id: data._id };
+      setAllMenuItems((prev) => [...prev, saved]);
+      setMenuItemsInCategory((prev) => [...prev, saved]);
+      closeAddItem();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add item");
+    }
+  }
 
-    setMenuItemsInCategory([...menuItemsInCategory, newItem]);
-    closeAddMenuItemModal();
-  };
+  function openEditItem(it) {
+    setEditingItem(it);
+    setItemName(it.name);
+    setItemDesc(it.description);
+    setItemPrice(it.price);
+    setItemImage(it.image);
+    setIsEditItemOpen(true);
+  }
+  function closeEditItem() {
+    setIsEditItemOpen(false);
+  }
+  async function saveEditItem() {
+    try {
+      const { data } = await api.put(
+        `/restaurant/${selectedRestaurantId}/menu/${editingItem.id}`,
+        {
+          name: itemName,
+          description: itemDesc,
+          price: parseFloat(itemPrice),
+          image: itemImage,
+          category: selectedCategory.id,
+        }
+      );
+      const updated = { ...data, id: data._id };
+      setAllMenuItems((prev) =>
+        prev.map((i) => (i.id === editingItem.id ? updated : i))
+      );
+      setMenuItemsInCategory((prev) =>
+        prev.map((i) => (i.id === editingItem.id ? updated : i))
+      );
+      closeEditItem();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update item");
+    }
+  }
+
+  async function deleteItem(it) {
+   
+    if (!window.confirm("Delete this item?")) return;
+    try {
+      await api.delete(`/restaurant/${selectedRestaurantId}/menu/${it.id}`);
+      setAllMenuItems((prev) => prev.filter((i) => i.id !== it.id));
+      setMenuItemsInCategory((prev) => prev.filter((i) => i.id !== it.id));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete item");
+    }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
       <NavBar
         className={`fixed top-0 left-0 h-full bg-gray-800 transition-all duration-300 ${
           isSidebarOpen ? "w-64" : "w-20"
         }`}
       />
 
-      {/* Main area */}
       <div
         className={`flex-1 flex flex-col transition-all duration-300 ${
           isSidebarOpen ? "ml-64" : "ml-20"
@@ -174,182 +269,91 @@ function ManageMenu() {
           <div className="container mx-auto">
             <h1 className="text-2xl font-semibold mb-4">Manage Menu Items</h1>
 
-            {/* Restaurant selector */}
-            <div className="mb-4">
-              <label className="block text-gray-700 font-bold mb-2">
-                Select Restaurant:
-              </label>
-              <select
-                className="w-full border rounded px-3 py-2"
-                value={selectedRestaurantId}
-                onChange={handleRestaurantChange}
-              >
-                <option value="">-- Select a Restaurant --</option>
-                {restaurants.map((r) => (
-                  <option key={r._id} value={r._id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            
+            <RestaurantSelector
+              restaurants={restaurants}
+              value={selectedRestaurantId}
+              onChange={handleRestaurantChange}
+            />
 
-            {/* Category grid */}
+           
             {selectedRestaurantId && !selectedCategory && (
-              <>
-                <h2 className="text-lg font-semibold mb-2">Select Category</h2>
-                <div className="flex space-x-4 overflow-x-auto mb-4">
-                  {menuCategories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      className="w-32 h-32 rounded-full overflow-hidden shadow cursor-pointer"
-                      onClick={() => handleCategoryClick(cat)}
-                    >
-                      <img
-                        src={`/images/${cat.image}`}
-                        alt={cat.name}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="text-center mt-1 font-medium">
-                        {cat.name}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
+              <CategoryList
+                categories={menuCategories}
+                selectedId={selectedCategory?.id}
+                onSelect={selectCategory}
+                onAdd={openAddMenu}
+                onEdit={openEditMenu}
+                onDelete={deleteMenu}
+              />
             )}
 
-            {/* Items grid */}
+            {/* 3. Menu items */}
             {selectedCategory && (
-              <>
-                <h2 className="text-xl font-semibold mb-4">
-                  Menu Items in {selectedCategory.name}
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {menuItemsInCategory.map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-white shadow rounded overflow-hidden"
-                    >
-                      <img
-                        src={
-                          item.image.startsWith("data:")
-                            ? item.image
-                            : `/images/${item.image}`
-                        }
-                        alt={item.name}
-                        className="w-full h-32 object-cover"
-                      />
-                      <div className="p-4">
-                        <h3 className="font-semibold">{item.name}</h3>
-                        <p className="text-gray-600 text-sm mb-2">
-                          {item.description}
-                        </p>
-                        <p className="font-bold text-indigo-600">
-                          ${item.price.toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Add New Item card */}
-                  <div
-                    className="flex items-center justify-center bg-gray-200 rounded cursor-pointer hover:bg-gray-300"
-                    style={{ height: 200 }}
-                    onClick={openAddMenuItemModal}
-                  >
-                    <div className="text-gray-600 text-center">
-                      <svg
-                        className="w-10 h-10 mx-auto mb-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 6v12m6-6H6"
-                        />
-                      </svg>
-                      <span>Add New Item</span>
-                    </div>
-                  </div>
-                </div>
-              </>
+              <MenuItemsGrid
+                category={selectedCategory}
+                items={menuItemsInCategory}
+                onBack={backToMenus}
+                onAdd={openAddItem}
+                onEdit={openEditItem}
+                onDelete={deleteItem}
+              />
             )}
           </div>
         </main>
       </div>
 
-      {/* Add New Menu Item Modal */}
-      <Modal
-        isOpen={isAddMenuItemModalOpen}
-        onRequestClose={closeAddMenuItemModal}
-        style={{
-          overlay: { backgroundColor: "rgba(0,0,0,0.6)", zIndex: 1000 },
-          content: {
-            maxWidth: 500,
-            margin: "auto",
-            borderRadius: 8,
-            padding: 24,
-          },
-        }}
-      >
-        <h2 className="text-xl font-semibold mb-4">Add New Menu Item</h2>
-        <form className="space-y-4">
-          <input
-            type="text"
-            placeholder="Item Name"
-            className="w-full border rounded px-3 py-2"
-            value={newItemName}
-            onChange={(e) => setNewItemName(e.target.value)}
-          />
-          <textarea
-            placeholder="Item Description"
-            className="w-full border rounded px-3 py-2"
-            value={newItemDescription}
-            onChange={(e) => setNewItemDescription(e.target.value)}
-          />
-          <input
-            type="number"
-            placeholder="Item Price"
-            className="w-full border rounded px-3 py-2"
-            value={newItemPrice}
-            onChange={(e) => setNewItemPrice(e.target.value)}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            className="w-full"
-            onChange={handleNewItemImageChange}
-          />
-          {newItemImagePreviewUrl && (
-            <img
-              src={newItemImagePreviewUrl}
-              alt="Preview"
-              className="w-24 h-24 object-cover rounded mt-2"
-            />
-          )}
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={closeAddMenuItemModal}
-              className="px-4 py-2 mr-2 bg-gray-300 rounded"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveNewMenuItem}
-              className="px-4 py-2 bg-blue-600 text-white rounded"
-            >
-              Save
-            </button>
-          </div>
-        </form>
-      </Modal>
+      {/* 4. Category modals */}
+      <CategoryModal
+        isOpen={isAddMenuOpen}
+        onClose={closeAddMenu}
+        onSave={saveAddMenu}
+        name={menuName}
+        setName={setMenuName}
+        imagePreview={menuImage}
+        onImageChange={onMenuImageChange}
+        saveLabel="Save"
+      />
+      <CategoryModal
+        isOpen={isEditMenuOpen}
+        onClose={closeEditMenu}
+        onSave={saveEditMenu}
+        name={menuName}
+        setName={setMenuName}
+        imagePreview={menuImage}
+        onImageChange={onMenuImageChange}
+        saveLabel="Update"
+      />
+
+      
+      <ItemModal
+        isOpen={isAddItemOpen}
+        onClose={closeAddItem}
+        onSave={saveAddItem}
+        name={itemName}
+        setName={setItemName}
+        description={itemDesc}
+        setDescription={setItemDesc}
+        price={itemPrice}
+        setPrice={setItemPrice}
+        imagePreview={itemImage}
+        onImageChange={onItemImageChange}
+        saveLabel="Save"
+      />
+      <ItemModal
+        isOpen={isEditItemOpen}
+        onClose={closeEditItem}
+        onSave={saveEditItem}
+        name={itemName}
+        setName={setItemName}
+        description={itemDesc}
+        setDescription={setItemDesc}
+        price={itemPrice}
+        setPrice={setItemPrice}
+        imagePreview={itemImage}
+        onImageChange={onItemImageChange}
+        saveLabel="Update"
+      />
     </div>
   );
 }
-
-export default ManageMenu;
